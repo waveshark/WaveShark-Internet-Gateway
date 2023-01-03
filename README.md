@@ -10,5 +10,14 @@ Partially meant to inspire other WaveShark users to write their own software to 
 
 ## Usage
 
+* python3 -m venv venv
+* venv\Scripts\activate.bat (on Windows)
 * python3 -m pip install -r requirements.txt
 * python3 ws-internet-gateway.py
+
+## Alternative usage (python versus python3)
+
+* python -m venv venv
+* venv\Scripts\activate.bat (on Windows)
+* python -m pip install -r requirements.txt
+* python ws-internet-gateway.py
