@@ -1,0 +1,3 @@
+paho-mqtt==1.6.1
+pycryptodomex==3.16.0
+pyserial==3.5
