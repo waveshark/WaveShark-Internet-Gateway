@@ -105,7 +105,7 @@ def on_message(ciphertext):
 # Subscribe to incoming Internet messages
 tcpipMessageClient.subscribe(QUEUE_NAME, on_message)
 
-# Configure device for BBS operation
+# Configure WaveShark Communicator for operation
 waveSharkSerialClient.writeToSerial("/SEROUT FIELDTEST", 3)
 
 # For sending periodic gatway announcements
@@ -116,7 +116,7 @@ while True:
   # Received Internet message?
   # TODO: Process incoming Internet messages
 
-  # Received WaveShark message?
+  # Received WaveShark Communicator message?
   s = waveSharkSerialClient.readLineFromSerial()
   if re.match(r'^\[RSS: ', s):
     print("\r\nDevice: {}".format(s))
@@ -133,13 +133,11 @@ while True:
       for i in range(0, len(deviceName.split(" "))):
         del tokens[0]
       post = (" ".join(tokens)).strip()
-      print ("Received message to send [" + post + "]")
+      print("Received message to send [" + post + "]")
       if post != "":
         # Encrypt message
         post = "[via {}] <{}> {}".format(deviceName, message_from, post)
         ciphertext = aesEncryption.encrypt_message(post)
-
-        print(">>> Ciphertext length: {}".format(len(ciphertext)))
 
         # Send message
         tcpipMessageClient.send_message(QUEUE_NAME, ciphertext)
@@ -152,11 +150,11 @@ while True:
     # Unknown command?
     elif "{} ".format(deviceName).lower() in s.lower():
       print("Got UNKNOWN command")
-      waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} HELP to get a list of available commands.".format(message_from, deviceName))
+      waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to my area. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
 
   # Time to send announcement?
   secondsUntilAnnounce = (nextAnnounce - datetime.now()).total_seconds()
   if secondsUntilAnnounce <= 0:
     nextAnnounce = datetime.now() + timedelta(seconds = ANNOUNCE_INTERNAL_SECONDS)
     print("Sending announcement")
-    waveSharkSerialClient.writeToSerial("Hello from {} Internet Gateway! Say {} HELP to get a list of available commands.".format(deviceName, deviceName), 2)
+    waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message< to send a message to my area.".format(deviceName, deviceName), 2)

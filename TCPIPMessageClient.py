@@ -5,7 +5,6 @@ class TCPIPMessageClient:
     self.__client = paho.Client()
 
   def __on_message(self, client, user_data, message):
-    print("{}: ".format(self.__receive_count), end = "")
     self.__receive_count += 1
     self.__our_on_message_function(message.payload.decode("ascii").strip())
 
@@ -25,4 +24,4 @@ class TCPIPMessageClient:
     self.__client.loop_start()
 
   def send_message(self, queue_name, message):
-    print("{}: {}".format(message, self.__client.publish(queue_name, message, qos = 0)))
+    self.__client.publish(queue_name, message, qos = 0)
