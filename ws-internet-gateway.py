@@ -157,4 +157,4 @@ while True:
   if secondsUntilAnnounce <= 0:
     nextAnnounce = datetime.now() + timedelta(seconds = ANNOUNCE_INTERNAL_SECONDS)
     print("Sending announcement")
-    waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message< to send a message to my area.".format(deviceName, deviceName), 2)
+    waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to my area.".format(deviceName, deviceName), 2)
