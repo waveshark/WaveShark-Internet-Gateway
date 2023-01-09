@@ -8,7 +8,7 @@ class TCPIPMessageClient:
     self.__receive_count += 1
     self.__our_on_message_function(message.payload.decode("ascii").strip())
 
-  def connect(self, messaging_hostname = "broker.mqttdashboard.com", messaging_port = 1883):
+  def connect(self, messaging_hostname, messaging_port):
     try:
       self.__client.connect(messaging_hostname, messaging_port)
       return True

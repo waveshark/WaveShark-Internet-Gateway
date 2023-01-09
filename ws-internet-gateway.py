@@ -9,6 +9,12 @@ from WaveSharkSerialClient import WaveSharkSerialClient
 from AESEncryption import AESEncryption
 from TCPIPMessageClient import TCPIPMessageClient
 
+INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME = "broker.mqttdashboard.com"
+INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
+
+VERSION = "0.0.1"
+COPYRIGHT_YEAR = 2023
+
 # Look for attached WaveShark Communicators
 waveSharkSerialClient = WaveSharkSerialClient()
 waveshark_ports = waveSharkSerialClient.getAttachedWaveSharkCommunicators()
@@ -28,11 +34,13 @@ print("")
 # Parse command-line arguments
 # arg_parser = argparse.ArgumentParser(usage = "%(prog)s -p|--port <WaveShark Communicator port>", description = "Send or receive messages")
 arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument("topic", help = "Internet TCP/IP messaging server topic, example: mFiFocNe")
-arg_parser.add_argument("key", help = "Internet TCP/IP message encryption key (16 characters), example: TmAAYuFzCkuPxBXu")
-arg_parser.add_argument("iv", help = "Internet TCP/IP message encryption IV (16 characters), example: GTGbbsTfViwIoOEI")
+arg_parser.add_argument("topic", help = "Internet messaging server topic, example: mFiFocNe")
+arg_parser.add_argument("key", help = "Internet message encryption key (16 characters), example: TmAAYuFzCkuPxBXu")
+arg_parser.add_argument("iv", help = "Internet message encryption IV (16 characters), example: GTGbbsTfViwIoOEI")
 arg_parser.add_argument("-l", "--logfile", help = "Log filename")
 arg_parser.add_argument("-p", "--port", help = "WaveShark Communicator port")
+arg_parser.add_argument("-H", "--tcpip_hostname", help = "Internet MQTT messaging hostname", default = INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME)
+arg_parser.add_argument("-P", "--tcpip_port", help = "Internet MQTT messaging port", default = INTERNET_TCPIP_MQTT_DEFAULT_PORT)
 arg_parser.add_argument("-a", "--announce", help = "WaveShark announcement interval in seconds, 0 = disable announcements", default = 600, type = int)
 args = arg_parser.parse_args()
 
@@ -40,6 +48,8 @@ args = arg_parser.parse_args()
 topic                     = "my/{}".format(args.topic)
 encryption_key            = args.key
 encryption_iv             = args.iv
+tcpip_hostname            = args.tcpip_hostname
+tcpip_port                = args.tcpip_port
 announce_interval_seconds = args.announce
 
 # Optional "port" argument
@@ -72,7 +82,7 @@ if len(waveshark_ports) == 1:
 # or there is more than one WaveShark Communicator attached to this computer and a valid port argument was provided
 # TODO: This gets more nuance
 
-print("WaveShark Internet Gateway starting\r\n")
+print("WaveShark Internet Gateway v{}\r\nCopyright {} WaveShark\r\n".format(VERSION, COPYRIGHT_YEAR))
 
 # Connect to selected WaveShark Communicator
 # TODO: Make this optional
@@ -85,17 +95,24 @@ else:
   print("Error connecting to WaveShark Communicator on port [{}]".format(port))
   sys.exit()
 
+def console_log(message):
+  print(">>> [{}] {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message))
+
 # Initialize AES encryption
+console_log("Initializing encryption")
 aesEncryption = AESEncryption(encryption_key, encryption_iv)
 
-# Connect to TCP/IP messaging system
+# Connect to Internet messaging system
 tcpipMessageClient = TCPIPMessageClient()
-if tcpipMessageClient.connect() == True:
-  print("Connected to TCP/IP message service")
+console_log("Connecting to Internet messaging system")
+if tcpipMessageClient.connect(tcpip_hostname, tcpip_port) == True:
+  console_log("Connected to Internet messaging system [Hostname: {}] [Port: {}]".format(tcpip_hostname, tcpip_port))
 else:
-  sys.exit("Failed to connect to TCP/IP message service")
+  sys.exit("Failed to connect to Internet message service")
 
 # Configure device for gateway operation
+# TODO: Make this optional
+console_log("Configuring WaveShark Communicator for Internet Gateway operation")
 waveSharkSerialClient.writeToSerial("/SEROUT FIELDTEST", 3)
 
 # Grab a copy of our device name
@@ -112,17 +129,15 @@ def on_message(ciphertext):
     return
 
   # Display message
-  print(">>> Received via Internet: {}".format(plaintext))
+  console_log("Received via Internet: {}".format(plaintext))
 
   # Repeat to WaveShark Communicator
   # TODO: Make this optional
   waveSharkSerialClient.writeToSerial(plaintext)
 
 # Subscribe to incoming Internet messages
+console_log("Subscribing to incoming Internet messages [Topic: {}]".format(topic)) 
 tcpipMessageClient.subscribe(topic, on_message)
-
-# Configure WaveShark Communicator for operation
-waveSharkSerialClient.writeToSerial("/SEROUT FIELDTEST", 3)
 
 # For sending periodic gatway announcements
 nextAnnounce = datetime.now()
@@ -133,7 +148,7 @@ while True:
   # TODO: Make this check optional
   s = waveSharkSerialClient.readLineFromSerial()
   if re.match(r'^\[RSS: ', s):
-    print("\r\n>>> Via WaveShark: {}".format(s))
+    console_log("Via WaveShark: {}".format(s))
     message_from = s.split("<")[1].split(">")[0]
     message_body = s[slice(s.find(">") + 2, len(s))]
     # message_rss  = s.split("]")[0].split(" ")[1]
@@ -141,13 +156,13 @@ while True:
 
     # SEND command?
     if "{} SEND".format(deviceName).lower() in s.lower():
-      print(">>> Got SEND command")
+      console_log("Got SEND command")
       tokens = message_body.strip().split(" ")
       del tokens[0]
       for i in range(0, len(deviceName.split(" "))):
         del tokens[0]
       post = (" ".join(tokens)).strip()
-      print(">>> Received message to send [" + post + "]")
+      console_log("Received message to send [" + post + "]")
       if post != "":
         # Encrypt message
         post = "[via {}] <{}> {}".format(deviceName, message_from, post)
@@ -162,16 +177,16 @@ while True:
         waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
 
     # Unknown command?
-    elif "{} ".format(deviceName).lower() in s.lower():
-      print(">>> Got UNKNOWN command")
-      waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to my area. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
+    elif "{} ".format(deviceName).lower() in s.lower() or message_body.lower() == deviceName.lower():
+      console_log("Got UNKNOWN command")
+      waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to other WaveShark networks. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
 
   # Time to send announcement?
   secondsUntilAnnounce = (nextAnnounce - datetime.now()).total_seconds() if announce_interval_seconds != 0 else 1
   if secondsUntilAnnounce <= 0:
     nextAnnounce = datetime.now() + timedelta(seconds = announce_interval_seconds)
-    print(">>> Sending announcement")
-    waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to my area.".format(deviceName, deviceName), 2)
+    console_log("Sending announcement")
+    waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to other WaveShark networks.".format(deviceName, deviceName), 2)
 
   # Slow down main loop a bit
   time.sleep(0.01)
