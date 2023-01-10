@@ -52,51 +52,66 @@ tcpip_hostname            = args.tcpip_hostname
 tcpip_port                = args.tcpip_port
 announce_interval_seconds = args.announce
 
+# Optional "logfile" argument
+log_file = None
+if args.logfile:
+  try:
+    log_file = open(args.logfile, "a")
+    print("Opened log file [{}]".format(args.logfile))
+  except:
+    sys.exit("Error opening log file [{}]".format(args.logfile))
+
 # Optional "port" argument
-port = None
+waveshark_port = None
 if args.port:
-  port = args.port
+  waveshark_port = args.port
 
 # More than one WaveShark Communicator attached to this computer and no port argument provided?
 # TODO: Make WaveShark Communicator attachment optional
-if not port and len(waveshark_ports) > 1:
-  print("More than one WaveShark Communicator is attached to this computer.  You must specify which one to connect to using the -p or --port argument.")
-  sys.exit()
+if not waveshark_port and len(waveshark_ports) > 1:
+  sys.exit("More than one WaveShark Communicator is attached to this computer.  You must specify which one to connect to using the -p or --port argument.")
 
 # More than one WaveShark Communicator attached to this computer but port argument provided does not match any valid port name?
 if len(waveshark_ports) > 1:
   valid_port_provided = False
   for p in waveshark_ports:
-    if p["port"].lower() == port.lower():
+    if p["port"].lower() == waveshark_port.lower():
       valid_port_provided = True
       break
 if len(waveshark_ports) > 1 and not valid_port_provided:
-  print("There is no WaveShark Communicator attached to port [{}]".format(port))
+  print("There is no WaveShark Communicator attached to port [{}]".format(waveshark_port))
   sys.exit()
 
 # Only one WaveShark Communicator attached to this computer?
 if len(waveshark_ports) == 1:
-  port = waveshark_ports[0]["port"]
+  waveshark_port = waveshark_ports[0]["port"]
+  print("NOTE: Only one WaveShark Communicator attached to this computer, forced port to [{}]".format(waveshark_port))
 
 # If we made it here then there is either only one WaveShark Communicator attached to this computer
 # or there is more than one WaveShark Communicator attached to this computer and a valid port argument was provided
 # TODO: This gets more nuance
 
-print("WaveShark Internet Gateway v{}\r\nCopyright {} WaveShark\r\n".format(VERSION, COPYRIGHT_YEAR))
+print("\r\nWaveShark Internet Gateway v{}\r\nCopyright {} WaveShark\r\n".format(VERSION, COPYRIGHT_YEAR))
 
 # Connect to selected WaveShark Communicator
 # TODO: Make this optional
-connection_info = waveSharkSerialClient.tryConnect(port)
+connection_info = waveSharkSerialClient.tryConnect(waveshark_port)
 
 # Did we connect?
 if connection_info:
   print("Connected to WaveShark Communicator with device name [{}] on port [{}]".format(connection_info["deviceName"], connection_info["port"]))
 else:
-  print("Error connecting to WaveShark Communicator on port [{}]".format(port))
+  print("Error connecting to WaveShark Communicator on port [{}]".format(waveshark_port))
   sys.exit()
 
 def console_log(message):
-  print(">>> [{}] {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message))
+  timestamped_message = ">>> [{}] {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message)
+  print(timestamped_message)
+  if log_file:
+    log_file.write(timestamped_message + "\r\n")
+    log_file.flush()
+
+console_log("WaveShark Internet Gateway starting")
 
 # Initialize AES encryption
 console_log("Initializing encryption")
@@ -104,9 +119,9 @@ aesEncryption = AESEncryption(encryption_key, encryption_iv)
 
 # Connect to Internet messaging system
 tcpipMessageClient = TCPIPMessageClient()
-console_log("Connecting to Internet messaging system")
+console_log("Connecting to Internet messaging system [Hostname: {}] [Port: {}]".format(tcpip_hostname, tcpip_port))
 if tcpipMessageClient.connect(tcpip_hostname, tcpip_port) == True:
-  console_log("Connected to Internet messaging system [Hostname: {}] [Port: {}]".format(tcpip_hostname, tcpip_port))
+  console_log("Connected to Internet messaging system")
 else:
   sys.exit("Failed to connect to Internet message service")
 
