@@ -177,7 +177,7 @@ while True:
       for i in range(0, len(deviceName.split(" "))):
         del tokens[0]
       post = (" ".join(tokens)).strip()
-      console_log("Received message to send [" + post + "]")
+      console_log("Received message to send [<{}> {}]".format(message_from, post))
       if post != "":
         # Encrypt message
         post = "[via {}] <{}> {}".format(deviceName, message_from, post)
