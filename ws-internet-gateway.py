@@ -108,7 +108,7 @@ def console_log(message):
   timestamped_message = ">>> [{}] {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message)
   print(timestamped_message)
   if log_file:
-    log_file.write(timestamped_message + "\r\n")
+    log_file.write(timestamped_message + "\n")
     log_file.flush()
 
 console_log("WaveShark Internet Gateway starting")
