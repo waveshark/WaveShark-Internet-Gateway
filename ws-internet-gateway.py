@@ -187,7 +187,7 @@ while True:
         tcpipMessageClient.send_message(topic, ciphertext)
 
         # Tell sender that message was sent
-        waveSharkSerialClient.writeToSerial("{}, your message has been sent.".format(message_from))
+        waveSharkSerialClient.writeToSerial("OK, {}.".format(message_from))
       else:
         waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
 
