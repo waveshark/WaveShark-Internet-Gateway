@@ -12,7 +12,7 @@ from TCPIPMessageClient import TCPIPMessageClient
 INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME = "broker.mqttdashboard.com"
 INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 COPYRIGHT_YEAR = 2023
 
 # Look for attached WaveShark Communicators
@@ -42,6 +42,7 @@ arg_parser.add_argument("-p", "--port", help = "WaveShark Communicator port")
 arg_parser.add_argument("-H", "--tcpip_hostname", help = "Internet MQTT messaging hostname", default = INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME)
 arg_parser.add_argument("-P", "--tcpip_port", help = "Internet MQTT messaging port", default = INTERNET_TCPIP_MQTT_DEFAULT_PORT)
 arg_parser.add_argument("-a", "--announce", help = "WaveShark announcement interval in seconds, 0 = disable announcements", default = 600, type = int)
+arg_parser.add_argument("-A", "--all", help = "Repeat all WaveShark messages, not just those directed at the Gateway", action = argparse.BooleanOptionalAction)
 args = arg_parser.parse_args()
 
 # Required arguments or optional arguments with defaults
@@ -51,6 +52,14 @@ encryption_iv             = args.iv
 tcpip_hostname            = args.tcpip_hostname
 tcpip_port                = args.tcpip_port
 announce_interval_seconds = args.announce
+
+# "encryption_key" validation
+if len(encryption_key) != 16:
+  sys.exit("Encryption key must be exactly 16 characters")
+
+# "encryption_iv" validation
+if len(encryption_iv) != 16:
+  sys.exit("Encryption IV must be exactly 16 characters")
 
 # Optional "logfile" argument
 log_file = None
@@ -65,6 +74,12 @@ if args.logfile:
 waveshark_port = None
 if args.port:
   waveshark_port = args.port
+
+# Optional "all" argument
+repeat_all = False
+if args.all:
+  print("Repeating all WaveShark messages, not just those directed at the Gateway\r\n")
+  repeat_all = True
 
 # More than one WaveShark Communicator attached to this computer and no port argument provided?
 # TODO: Make WaveShark Communicator attachment optional
@@ -190,6 +205,17 @@ while True:
         waveSharkSerialClient.writeToSerial("OK, {}.".format(message_from))
       else:
         waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
+
+    # "Repeat all" mode?
+    elif repeat_all:
+      console_log("Repeating all WaveShark messages [<{}> {}]".format(message_from, message_body))
+
+      # Encrypt message
+      post = "[via {}] <{}> {}".format(deviceName, message_from, message_body)
+      ciphertext = aesEncryption.encrypt_message(post)
+
+      # Send message
+      tcpipMessageClient.send_message(topic, ciphertext)
 
     # Unknown command?
     elif "{} ".format(deviceName).lower() in s.lower() or message_body.lower() == deviceName.lower():
