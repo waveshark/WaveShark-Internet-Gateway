@@ -12,24 +12,11 @@ from TCPIPMessageClient import TCPIPMessageClient
 INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME = "broker.mqttdashboard.com"
 INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
 
-VERSION = "0.0.2"
+VERSION = "1.0.0"
 COPYRIGHT_YEAR = 2023
 
-# Look for attached WaveShark Communicators
-waveSharkSerialClient = WaveSharkSerialClient()
-waveshark_ports = waveSharkSerialClient.getAttachedWaveSharkCommunicators()
-
-# No WaveShark Communicators attached to this computer?
-# TODO: Make WaveShark Communicator attachment optional
-if len(waveshark_ports) == 0:
-  print("ERROR: Did not find any WaveShark Communicators attached to this computer")
-  sys.exit()
-
-# Display list of WaveShark Communicators attached to this computer
-print("Found the following WaveShark Communicators attached to this computer:")
-for waveshark_port in waveshark_ports:
-  print("[WaveShark Communicator name: {}] [Port: {}]".format(waveshark_port["deviceName"], waveshark_port["port"]))
-print("")
+OPERATION_MODE_NORMAL               = 1
+OPERATION_MODE_INTERNET_LISTEN_ONLY = 2
 
 # Parse command-line arguments
 # arg_parser = argparse.ArgumentParser(usage = "%(prog)s -p|--port <WaveShark Communicator port>", description = "Send or receive messages")
@@ -40,9 +27,10 @@ arg_parser.add_argument("iv", help = "Internet message encryption IV (16 charact
 arg_parser.add_argument("-l", "--logfile", help = "Log filename")
 arg_parser.add_argument("-p", "--port", help = "WaveShark Communicator port")
 arg_parser.add_argument("-H", "--tcpip_hostname", help = "Internet MQTT messaging hostname", default = INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME)
-arg_parser.add_argument("-P", "--tcpip_port", help = "Internet MQTT messaging port", default = INTERNET_TCPIP_MQTT_DEFAULT_PORT)
+arg_parser.add_argument("-P", "--tcpip_port", help = "Internet MQTT messaging port", default = INTERNET_TCPIP_MQTT_DEFAULT_PORT, type = int)
 arg_parser.add_argument("-a", "--announce", help = "WaveShark announcement interval in seconds, 0 = disable announcements", default = 600, type = int)
 arg_parser.add_argument("-A", "--all", help = "Repeat all WaveShark messages, not just those directed at the Gateway", action = argparse.BooleanOptionalAction)
+arg_parser.add_argument("-m", "--mode", help = "Operation mode", default = 1, type = int)
 args = arg_parser.parse_args()
 
 # Required arguments or optional arguments with defaults
@@ -52,6 +40,7 @@ encryption_iv             = args.iv
 tcpip_hostname            = args.tcpip_hostname
 tcpip_port                = args.tcpip_port
 announce_interval_seconds = args.announce
+operation_mode            = args.mode
 
 # "encryption_key" validation
 if len(encryption_key) != 16:
@@ -60,6 +49,10 @@ if len(encryption_key) != 16:
 # "encryption_iv" validation
 if len(encryption_iv) != 16:
   sys.exit("Encryption IV must be exactly 16 characters")
+
+# "operation_mode" validation
+if operation_mode != OPERATION_MODE_NORMAL and operation_mode != OPERATION_MODE_INTERNET_LISTEN_ONLY:
+  sys.exit("Operation mode must be {} (normal) or {} (Internet MQTT listener)".format(OPERATION_MODE_NORMAL, OPERATION_MODE_INTERNET_LISTEN_ONLY))
 
 # Optional "logfile" argument
 log_file = None
@@ -78,46 +71,60 @@ if args.port:
 # Optional "all" argument
 repeat_all = False
 if args.all:
-  print("Repeating all WaveShark messages, not just those directed at the Gateway\r\n")
+  print("Repeating all WaveShark messages, not just those directed at the Gateway")
   repeat_all = True
 
+# Look for attached WaveShark Communicators
+waveSharkSerialClient = WaveSharkSerialClient()
+waveshark_ports = waveSharkSerialClient.getAttachedWaveSharkCommunicators()
+
+# No WaveShark Communicators attached to this computer?
+if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) == 0:
+  sys.exit("ERROR: Did not find any WaveShark Communicators attached to this computer")
+
+# Display list of WaveShark Communicators attached to this computer
+print("Found the following WaveShark Communicators attached to this computer:")
+for ws_port in waveshark_ports:
+  print("[WaveShark Communicator name: {}] [Port: {}]".format(ws_port["deviceName"], ws_port["port"]))
+print("")
+
 # More than one WaveShark Communicator attached to this computer and no port argument provided?
-# TODO: Make WaveShark Communicator attachment optional
-if not waveshark_port and len(waveshark_ports) > 1:
+if operation_mode == OPERATION_MODE_NORMAL and not waveshark_port and len(waveshark_ports) > 1:
   sys.exit("More than one WaveShark Communicator is attached to this computer.  You must specify which one to connect to using the -p or --port argument.")
 
 # More than one WaveShark Communicator attached to this computer but port argument provided does not match any valid port name?
-if len(waveshark_ports) > 1:
+if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) > 1:
   valid_port_provided = False
   for p in waveshark_ports:
     if p["port"].lower() == waveshark_port.lower():
       valid_port_provided = True
       break
-if len(waveshark_ports) > 1 and not valid_port_provided:
-  print("There is no WaveShark Communicator attached to port [{}]".format(waveshark_port))
-  sys.exit()
+  if len(waveshark_ports) > 1 and not valid_port_provided:
+    sys.exit("There is no WaveShark Communicator attached to port [{}]".format(waveshark_port))
 
 # Only one WaveShark Communicator attached to this computer?
-if len(waveshark_ports) == 1:
+if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) == 1:
   waveshark_port = waveshark_ports[0]["port"]
   print("NOTE: Only one WaveShark Communicator attached to this computer, forced port to [{}]".format(waveshark_port))
 
-# If we made it here then there is either only one WaveShark Communicator attached to this computer
-# or there is more than one WaveShark Communicator attached to this computer and a valid port argument was provided
-# TODO: This gets more nuance
+# If we made it here then:
+# 1. There is either only one WaveShark Communicator attached to this computer OR
+# 2. There is more than one WaveShark Communicator attached to this computer and a valid port argument was provided
+# 3. We are operating in Internet MQTT listener mode
 
-print("\r\nWaveShark Internet Gateway v{}\r\nCopyright {} WaveShark\r\n".format(VERSION, COPYRIGHT_YEAR))
+print("WaveShark Internet Gateway v{}\r\nCopyright {} WaveShark\r\n".format(VERSION, COPYRIGHT_YEAR))
 
 # Connect to selected WaveShark Communicator
-# TODO: Make this optional
-connection_info = waveSharkSerialClient.tryConnect(waveshark_port)
+connection_info = None
+if operation_mode == OPERATION_MODE_NORMAL:
+  # Try to connect to WaveShark Communicator
+  connection_info = waveSharkSerialClient.tryConnect(waveshark_port)
 
-# Did we connect?
-if connection_info:
-  print("Connected to WaveShark Communicator with device name [{}] on port [{}]".format(connection_info["deviceName"], connection_info["port"]))
-else:
-  print("Error connecting to WaveShark Communicator on port [{}]".format(waveshark_port))
-  sys.exit()
+  # Did we connect?
+  if connection_info:
+    print("Connected to WaveShark Communicator with device name [{}] on port [{}]".format(connection_info["deviceName"], connection_info["port"]))
+  else:
+    sys.exit("Error connecting to WaveShark Communicator on port [{}]".format(waveshark_port))
 
 def console_log(message):
   timestamped_message = ">>> [{}] {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message)
@@ -141,13 +148,14 @@ else:
   sys.exit("Failed to connect to Internet message service")
 
 # Configure device for gateway operation
-# TODO: Make this optional
-console_log("Configuring WaveShark Communicator for Internet Gateway operation")
-waveSharkSerialClient.writeToSerial("/SEROUT FIELDTEST", 3)
+if operation_mode == OPERATION_MODE_NORMAL:
+  console_log("Configuring WaveShark Communicator for Internet Gateway operation")
+  waveSharkSerialClient.writeToSerial("/SEROUT FIELDTEST", 3)
 
 # Grab a copy of our device name
-# TODO: We may not have a device name
-deviceName = connection_info["deviceName"]
+deviceName = None
+if operation_mode == OPERATION_MODE_NORMAL:
+  deviceName = connection_info["deviceName"]
 
 # For receiving Internet messages
 def on_message(ciphertext):
@@ -162,8 +170,8 @@ def on_message(ciphertext):
   console_log("Received via Internet: {}".format(plaintext))
 
   # Repeat to WaveShark Communicator
-  # TODO: Make this optional
-  waveSharkSerialClient.writeToSerial(plaintext)
+  if operation_mode == OPERATION_MODE_NORMAL:
+    waveSharkSerialClient.writeToSerial(plaintext)
 
 # Subscribe to incoming Internet messages
 console_log("Subscribing to incoming Internet messages [Topic: {}]".format(topic)) 
@@ -174,60 +182,60 @@ nextAnnounce = datetime.now()
 
 # Main loop
 while True:
-  # Received WaveShark Communicator message?
-  # TODO: Make this check optional
-  s = waveSharkSerialClient.readLineFromSerial()
-  if re.match(r'^\[RSS: ', s):
-    console_log("Via WaveShark: {}".format(s))
-    message_from = s.split("<")[1].split(">")[0]
-    message_body = s[slice(s.find(">") + 2, len(s))]
-    # message_rss  = s.split("]")[0].split(" ")[1]
-    # message_snr  = s.split("]")[1].split(" ")[2]
+  if operation_mode == OPERATION_MODE_NORMAL:
+    # Received WaveShark Communicator message?
+    s = waveSharkSerialClient.readLineFromSerial()
+    if re.match(r'^\[RSS: ', s):
+      console_log("Via WaveShark: {}".format(s))
+      message_from = s.split("<")[1].split(">")[0]
+      message_body = s[slice(s.find(">") + 2, len(s))]
+      # message_rss  = s.split("]")[0].split(" ")[1]
+      # message_snr  = s.split("]")[1].split(" ")[2]
 
-    # SEND command?
-    if "{} SEND".format(deviceName).lower() in s.lower():
-      console_log("Got SEND command")
-      tokens = message_body.strip().split(" ")
-      del tokens[0]
-      for i in range(0, len(deviceName.split(" "))):
+      # SEND command?
+      if "{} SEND".format(deviceName).lower() in s.lower():
+        console_log("Got SEND command")
+        tokens = message_body.strip().split(" ")
         del tokens[0]
-      post = (" ".join(tokens)).strip()
-      console_log("Received message to send [<{}> {}]".format(message_from, post))
-      if post != "":
+        for i in range(0, len(deviceName.split(" "))):
+          del tokens[0]
+        post = (" ".join(tokens)).strip()
+        console_log("Received message to send [<{}> {}]".format(message_from, post))
+        if post != "":
+          # Encrypt message
+          post = "[via {}] <{}> {}".format(deviceName, message_from, post)
+          ciphertext = aesEncryption.encrypt_message(post)
+
+          # Send message
+          tcpipMessageClient.send_message(topic, ciphertext)
+
+          # Tell sender that message was sent
+          waveSharkSerialClient.writeToSerial("OK, {}.".format(message_from))
+        else:
+          waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
+
+      # "Repeat all" mode?
+      elif repeat_all:
+        console_log("Repeating all WaveShark messages [<{}> {}]".format(message_from, message_body))
+
         # Encrypt message
-        post = "[via {}] <{}> {}".format(deviceName, message_from, post)
+        post = "[via {}] <{}> {}".format(deviceName, message_from, message_body)
         ciphertext = aesEncryption.encrypt_message(post)
 
         # Send message
         tcpipMessageClient.send_message(topic, ciphertext)
 
-        # Tell sender that message was sent
-        waveSharkSerialClient.writeToSerial("OK, {}.".format(message_from))
-      else:
-        waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
+      # Unknown command?
+      elif "{} ".format(deviceName).lower() in s.lower() or message_body.lower() == deviceName.lower():
+        console_log("Got UNKNOWN command")
+        waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to other WaveShark networks. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
 
-    # "Repeat all" mode?
-    elif repeat_all:
-      console_log("Repeating all WaveShark messages [<{}> {}]".format(message_from, message_body))
-
-      # Encrypt message
-      post = "[via {}] <{}> {}".format(deviceName, message_from, message_body)
-      ciphertext = aesEncryption.encrypt_message(post)
-
-      # Send message
-      tcpipMessageClient.send_message(topic, ciphertext)
-
-    # Unknown command?
-    elif "{} ".format(deviceName).lower() in s.lower() or message_body.lower() == deviceName.lower():
-      console_log("Got UNKNOWN command")
-      waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to other WaveShark networks. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
-
-  # Time to send announcement?
-  secondsUntilAnnounce = (nextAnnounce - datetime.now()).total_seconds() if announce_interval_seconds != 0 else 1
-  if secondsUntilAnnounce <= 0:
-    nextAnnounce = datetime.now() + timedelta(seconds = announce_interval_seconds)
-    console_log("Sending announcement")
-    waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to other WaveShark networks.".format(deviceName, deviceName), 2)
+    # Time to send announcement?
+    secondsUntilAnnounce = (nextAnnounce - datetime.now()).total_seconds() if announce_interval_seconds != 0 else 1
+    if secondsUntilAnnounce <= 0:
+      nextAnnounce = datetime.now() + timedelta(seconds = announce_interval_seconds)
+      console_log("Sending announcement")
+      waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to other WaveShark networks.".format(deviceName, deviceName), 2)
 
   # Slow down main loop a bit
   time.sleep(0.01)
