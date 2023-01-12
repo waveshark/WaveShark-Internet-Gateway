@@ -19,7 +19,6 @@ OPERATION_MODE_NORMAL               = 1
 OPERATION_MODE_INTERNET_LISTEN_ONLY = 2
 
 # Parse command-line arguments
-# arg_parser = argparse.ArgumentParser(usage = "%(prog)s -p|--port <WaveShark Communicator port>", description = "Send or receive messages")
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument("topic", help = "Internet messaging server topic, example: mFiFocNe")
 arg_parser.add_argument("key", help = "Internet message encryption key (16 characters), example: TmAAYuFzCkuPxBXu")
