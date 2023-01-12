@@ -12,7 +12,7 @@ from TCPIPMessageClient import TCPIPMessageClient
 INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME = "broker.mqttdashboard.com"
 INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 COPYRIGHT_YEAR = 2023
 
 OPERATION_MODE_NORMAL               = 1

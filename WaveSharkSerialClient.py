@@ -1,12 +1,16 @@
 import serial
 import serial.tools.list_ports
+import time
 
 class WaveSharkSerialClient:
   def __init__(self):
     self.__ser = None
 
   def __readLineFromSerial(self, ser):
-    return ser.readline().decode("ascii").strip()
+    try:
+      return ser.readline().decode("ascii").strip()
+    except:
+      return ""
 
   def readLineFromSerial(self):
     return self.__readLineFromSerial(self.__ser)
@@ -25,15 +29,22 @@ class WaveSharkSerialClient:
     for port, desc, hwid in sorted(serial.tools.list_ports.comports()):
       if "CP210" in desc:
         try:
-          ser = serial.Serial(baudrate = 115200, timeout = 1.0)
+          ser = serial.Serial(baudrate = 115200, timeout = 0.01)
           ser.rts = False
           ser.dtr = False
           ser.port = port
           ser.open()
           self.__writeToSerial(ser, "/NAME")
-          line = self.__readLineFromSerial(ser)
-          if "sender name is [" in line:
-            waveshark_ports.append({"deviceName": line.split("[")[1].split("]")[0], "port": port})
+          for i in range(0, 100):
+            line = self.__readLineFromSerial(ser)
+            if "READY." in line or "sender name is" in line:
+              break
+          for i in range(0, 10):
+            self.__writeToSerial(ser, "/NAME")
+            line = self.__readLineFromSerial(ser)
+            if "sender name is [" in line:
+              waveshark_ports.append({"deviceName": line.split("[")[1].split("]")[0], "port": port})
+              break
         except:
           pass
 
@@ -41,17 +52,23 @@ class WaveSharkSerialClient:
 
   def tryConnect(self, port):
     try:
-      ser = serial.Serial(baudrate = 115200, timeout = 1.0)
+      ser = serial.Serial(baudrate = 115200, timeout = 0.01)
       ser.rts = False
       ser.dtr = False
       ser.port = port
       ser.open()
       self.__writeToSerial(ser, "/NAME")
-      line = self.__readLineFromSerial(ser)
-      if "sender name is [" in line:
-        sernder_name = line.split("[")[1].split("]")[0]
-        self.__ser = ser
-        return {"deviceName": sernder_name, "port": port}
+      for i in range(0, 100):
+        line = self.__readLineFromSerial(ser)
+        if "READY." in line or "sender name is [" in line:
+          break
+      for i in range(0, 10):
+        self.__writeToSerial(ser, "/NAME")
+        line = self.__readLineFromSerial(ser)
+        if "sender name is [" in line:
+          sender_name = line.split("[")[1].split("]")[0]
+          self.__ser = ser
+          return {"deviceName": sender_name, "port": port}
     except:
       pass
 
