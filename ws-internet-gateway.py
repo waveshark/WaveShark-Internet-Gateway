@@ -28,7 +28,7 @@ arg_parser.add_argument("-p", "--port", help = "WaveShark Communicator port")
 arg_parser.add_argument("-H", "--tcpip_hostname", help = "Internet MQTT messaging hostname", default = INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME)
 arg_parser.add_argument("-P", "--tcpip_port", help = "Internet MQTT messaging port", default = INTERNET_TCPIP_MQTT_DEFAULT_PORT, type = int)
 arg_parser.add_argument("-a", "--announce", help = "WaveShark announcement interval in seconds, 0 = disable announcements", default = 600, type = int)
-arg_parser.add_argument("-A", "--all", help = "Repeat all WaveShark messages, not just those directed at the Gateway", action = argparse.BooleanOptionalAction)
+arg_parser.add_argument("-A", "--all", help = "Repeat all WaveShark messages, not just those directed at the Gateway", action = "store_true")
 arg_parser.add_argument("-m", "--mode", help = "Operation mode", default = 1, type = int)
 args = arg_parser.parse_args()
 
