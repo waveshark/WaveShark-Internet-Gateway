@@ -39,7 +39,7 @@ class WaveSharkSerialClient:
             line = self.__readLineFromSerial(ser)
             if "READY." in line or "sender name is" in line:
               break
-          for i in range(0, 10):
+          for i in range(0, 20):
             self.__writeToSerial(ser, "/NAME")
             line = self.__readLineFromSerial(ser)
             if "sender name is [" in line:
@@ -62,7 +62,7 @@ class WaveSharkSerialClient:
         line = self.__readLineFromSerial(ser)
         if "READY." in line or "sender name is [" in line:
           break
-      for i in range(0, 10):
+      for i in range(0, 20):
         self.__writeToSerial(ser, "/NAME")
         line = self.__readLineFromSerial(ser)
         if "sender name is [" in line:

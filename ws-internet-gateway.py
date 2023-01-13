@@ -12,6 +12,9 @@ from TCPIPMessageClient import TCPIPMessageClient
 INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME = "broker.mqttdashboard.com"
 INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
 
+INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_KEY = "aaaaaaaaaaaaaaaa"
+INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_IV  = "bbbbbbbbbbbbbbbb"
+
 VERSION = "1.0.1"
 COPYRIGHT_YEAR = 2023
 
@@ -20,9 +23,9 @@ OPERATION_MODE_INTERNET_LISTEN_ONLY = 2
 
 # Parse command-line arguments
 arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument("topic", help = "Internet messaging server topic, example: mFiFocNe")
-arg_parser.add_argument("key", help = "Internet message encryption key (16 characters), example: TmAAYuFzCkuPxBXu")
-arg_parser.add_argument("iv", help = "Internet message encryption IV (16 characters), example: GTGbbsTfViwIoOEI")
+arg_parser.add_argument("topic", help = "Internet MQTT messaging server topic, example: mFiFocNe")
+arg_parser.add_argument("-k", "--key", help = "Internet MQTT message encryption key (exactly 16 characters), example: TmAAYuFzCkuPxBXu", default = INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_KEY)
+arg_parser.add_argument("-i", "--iv", help = "Internet MQTT message encryption IV (exactly 16 characters), example: GTGbbsTfViwIoOEI", default = INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_IV)
 arg_parser.add_argument("-l", "--logfile", help = "Log filename")
 arg_parser.add_argument("-p", "--port", help = "WaveShark Communicator port")
 arg_parser.add_argument("-H", "--tcpip_hostname", help = "Internet MQTT messaging hostname", default = INTERNET_TCPIP_MQTT_DEFAULT_HOSTNAME)
@@ -139,12 +142,12 @@ console_log("Initializing encryption")
 aesEncryption = AESEncryption(encryption_key, encryption_iv)
 
 # Connect to Internet messaging system
-tcpipMessageClient = TCPIPMessageClient()
-console_log("Connecting to Internet messaging system [Hostname: {}] [Port: {}]".format(tcpip_hostname, tcpip_port))
+tcpipMessageClient = TCPIPMessageClient(console_log)
+console_log("Connecting to Internet MQTT messaging system [Hostname: {}] [Port: {}]".format(tcpip_hostname, tcpip_port))
 if tcpipMessageClient.connect(tcpip_hostname, tcpip_port) == True:
-  console_log("Connected to Internet messaging system")
+  console_log("Connected to Internet MQTT messaging system")
 else:
-  sys.exit("Failed to connect to Internet message service")
+  sys.exit("Failed to connect to Internet MQTT message service")
 
 # Configure device for gateway operation
 if operation_mode == OPERATION_MODE_NORMAL:
@@ -158,8 +161,22 @@ if operation_mode == OPERATION_MODE_NORMAL:
 
 # For receiving Internet messages
 def on_message(ciphertext):
-  # Decrypt message
-  plaintext = aesEncryption.decrypt_message(ciphertext)
+  # Try to decrypt message
+  plaintext = None
+  try:
+    plaintext = aesEncryption.decrypt_message(ciphertext)
+  except:
+    pass
+
+  # Well-formed message after decryption?
+  if plaintext != None:
+    if "[via " not in plaintext:
+      plaintext = None
+
+  # Decryption successful?
+  if plaintext == None:
+    console_log("Unable to decrypt message, likely cause is wrong encryption key and/or wrong encryption Initialization Vector (IV)")
+    return
 
   # Ignore my own messages
   if ("[via {}]".format(deviceName)).lower() in plaintext.lower():
