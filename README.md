@@ -6,9 +6,12 @@ Uses end-to-end encryption and an Internet MQTT message store to pass messages b
 
 Partially meant to inspire other WaveShark users to write their own software to perform various functions using their WaveShark devices (dead drop, safety check-in list, barter point, etc).
 
-## Help / usage
+## Documentation
 
 See the [WaveShark Internet Gateway User Manual](https://www.waveshark.net/pages/downloads)
+
+## Built-in help
+Use the -h or --help argument to display basic help information
 
 ## Usage (Windows, stand-alone .EXE)
 
