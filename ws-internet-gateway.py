@@ -15,7 +15,7 @@ INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
 INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_KEY = "aaaaaaaaaaaaaaaa"
 INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_IV  = "bbbbbbbbbbbbbbbb"
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 COPYRIGHT_YEAR = 2023
 
 OPERATION_MODE_NORMAL               = 1
@@ -199,59 +199,64 @@ nextAnnounce = datetime.now()
 # Main loop
 while True:
   if operation_mode == OPERATION_MODE_NORMAL:
-    # Received WaveShark Communicator message?
-    s = waveSharkSerialClient.readLineFromSerial()
-    if re.match(r'^\[RSS: ', s):
-      console_log("Via WaveShark: {}".format(s))
-      message_from = s.split("<")[1].split(">")[0]
-      message_body = s[slice(s.find(">") + 2, len(s))]
-      # message_rss  = s.split("]")[0].split(" ")[1]
-      # message_snr  = s.split("]")[1].split(" ")[2]
+    s = ""
+    try:
+      # Received WaveShark Communicator message?
+      s = waveSharkSerialClient.readLineFromSerial()
+      if re.match(r'^\[RSS: ', s):
+        console_log("Via WaveShark: [{}]".format(s))
+        message_from = s.split("<")[1].split(">")[0]
+        message_body = s[slice(s.find(">") + 2, len(s))]
+        # message_rss  = s.split("]")[0].split(" ")[1]
+        # message_snr  = s.split("]")[1].split(" ")[2]
 
-      # SEND command?
-      if "{} SEND".format(deviceName).lower() in s.lower():
-        console_log("Got SEND command")
-        tokens = message_body.strip().split(" ")
-        del tokens[0]
-        for i in range(0, len(deviceName.split(" "))):
+        # SEND command?
+        if "{} SEND".format(deviceName).lower() in s.lower():
+          console_log("Got SEND command")
+          tokens = message_body.strip().split(" ")
           del tokens[0]
-        post = (" ".join(tokens)).strip()
-        console_log("Received message to send [<{}> {}]".format(message_from, post))
-        if post != "":
+          for i in range(0, len(deviceName.split(" "))):
+            del tokens[0]
+          post = (" ".join(tokens)).strip()
+          console_log("Received message to send [<{}> {}]".format(message_from, post))
+          if post != "":
+            # Encrypt message
+            post = "[via {}] <{}> {}".format(deviceName, message_from, post)
+            ciphertext = aesEncryption.encrypt_message(post)
+
+            # Send message
+            tcpipMessageClient.send_message(topic, ciphertext)
+
+            # Tell sender that message was sent
+            waveSharkSerialClient.writeToSerial("OK, {}.".format(message_from))
+          else:
+            waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
+
+        # "Repeat all" mode?
+        elif repeat_all:
+          console_log("Repeating all WaveShark messages [<{}> {}]".format(message_from, message_body))
+
           # Encrypt message
-          post = "[via {}] <{}> {}".format(deviceName, message_from, post)
+          post = "[via {}] <{}> {}".format(deviceName, message_from, message_body)
           ciphertext = aesEncryption.encrypt_message(post)
 
           # Send message
           tcpipMessageClient.send_message(topic, ciphertext)
 
-          # Tell sender that message was sent
-          waveSharkSerialClient.writeToSerial("OK, {}.".format(message_from))
-        else:
-          waveSharkSerialClient.writeToSerial("{}, what is your message?".format(message_from))
+        # Unknown command?
+        elif "{} ".format(deviceName).lower() in s.lower() or message_body.lower() == deviceName.lower():
+          console_log("Got UNKNOWN command")
+          waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to other WaveShark networks. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
 
-      # "Repeat all" mode?
-      elif repeat_all:
-        console_log("Repeating all WaveShark messages [<{}> {}]".format(message_from, message_body))
+      # Time to send announcement?
+      secondsUntilAnnounce = (nextAnnounce - datetime.now()).total_seconds() if announce_interval_seconds != 0 else 1
+      if secondsUntilAnnounce <= 0:
+        nextAnnounce = datetime.now() + timedelta(seconds = announce_interval_seconds)
+        console_log("Sending announcement")
+        waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to other WaveShark networks.".format(deviceName, deviceName), 2)
 
-        # Encrypt message
-        post = "[via {}] <{}> {}".format(deviceName, message_from, message_body)
-        ciphertext = aesEncryption.encrypt_message(post)
-
-        # Send message
-        tcpipMessageClient.send_message(topic, ciphertext)
-
-      # Unknown command?
-      elif "{} ".format(deviceName).lower() in s.lower() or message_body.lower() == deviceName.lower():
-        console_log("Got UNKNOWN command")
-        waveSharkSerialClient.writeToSerial("{}, I don't understand what you mean. Say {} SEND and your message to send a message to other WaveShark networks. For example, {} SEND Hello World.".format(message_from, deviceName, deviceName))
-
-    # Time to send announcement?
-    secondsUntilAnnounce = (nextAnnounce - datetime.now()).total_seconds() if announce_interval_seconds != 0 else 1
-    if secondsUntilAnnounce <= 0:
-      nextAnnounce = datetime.now() + timedelta(seconds = announce_interval_seconds)
-      console_log("Sending announcement")
-      waveSharkSerialClient.writeToSerial("Hello from the {} Internet Gateway! Say {} SEND <message> to send a message to other WaveShark networks.".format(deviceName, deviceName), 2)
+    except:
+      console_log("Caught exception in main loop: [Context: {}]".format(s))
 
   # Slow down main loop a bit
   time.sleep(0.01)
