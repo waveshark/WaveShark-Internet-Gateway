@@ -15,7 +15,7 @@ INTERNET_TCPIP_MQTT_DEFAULT_PORT     = 1883
 INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_KEY = "aaaaaaaaaaaaaaaa"
 INTERNET_TCPIP_MQTT_DEFAULT_ENCRYPTION_IV  = "bbbbbbbbbbbbbbbb"
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 COPYRIGHT_YEAR = 2023
 
 OPERATION_MODE_NORMAL               = 1
@@ -33,6 +33,7 @@ arg_parser.add_argument("-P", "--tcpip_port", help = "Internet MQTT messaging po
 arg_parser.add_argument("-a", "--announce", help = "WaveShark announcement interval in seconds, 0 = disable announcements", default = 600, type = int)
 arg_parser.add_argument("-A", "--all", help = "Repeat all WaveShark messages, not just those directed at the Gateway", action = "store_true")
 arg_parser.add_argument("-m", "--mode", help = "Operation mode", default = 1, type = int)
+arg_parser.add_argument("-d", "--debug", help = "Enable debug output", action = "store_true")
 args = arg_parser.parse_args()
 
 # Required arguments or optional arguments with defaults
@@ -76,23 +77,42 @@ if args.all:
   print("Repeating all WaveShark messages, not just those directed at the Gateway")
   repeat_all = True
 
+# Optional "debug" argument
+debug_mode = False
+if args.debug:
+  debug_mode = True
+
+def console_log(message, debug = False):
+  timestamped_message = ">>> [{}] ".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+  if debug:
+    timestamped_message += "[DEBUG] "
+  timestamped_message += message
+  print(timestamped_message)
+  if log_file:
+    log_file.write(timestamped_message + "\n")
+    log_file.flush()
+
+def debug_log(message):
+  if debug_mode:
+    console_log(message, True)
+
 # Look for attached WaveShark Communicators
-waveSharkSerialClient = WaveSharkSerialClient()
+waveSharkSerialClient = WaveSharkSerialClient(console_log, debug_log)
 waveshark_ports = waveSharkSerialClient.getAttachedWaveSharkCommunicators()
 
 # No WaveShark Communicators attached to this computer?
 if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) == 0:
-  sys.exit("ERROR: Did not find any WaveShark Communicators attached to this computer")
+  sys.exit("ERROR: Did not find any available WaveShark Communicators attached to this computer")
 
 # Display list of WaveShark Communicators attached to this computer
-print("Found the following WaveShark Communicators attached to this computer:")
+print("Found the following available WaveShark Communicators attached to this computer:")
 for ws_port in waveshark_ports:
   print("[WaveShark Communicator name: {}] [Port: {}]".format(ws_port["deviceName"], ws_port["port"]))
 print("")
 
 # More than one WaveShark Communicator attached to this computer and no port argument provided?
 if operation_mode == OPERATION_MODE_NORMAL and not waveshark_port and len(waveshark_ports) > 1:
-  sys.exit("More than one WaveShark Communicator is attached to this computer.  You must specify which one to connect to using the -p or --port argument.")
+  sys.exit("More than one WaveShark Communicator is available on this computer.  You must specify which one to connect to using the -p or --port argument.")
 
 # More than one WaveShark Communicator attached to this computer but port argument provided does not match any valid port name?
 if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) > 1:
@@ -102,7 +122,7 @@ if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) > 1:
       valid_port_provided = True
       break
   if len(waveshark_ports) > 1 and not valid_port_provided:
-    sys.exit("There is no WaveShark Communicator attached to port [{}]".format(waveshark_port))
+    sys.exit("There is no WaveShark Communicator available on port [{}]".format(waveshark_port))
 
 # Only one WaveShark Communicator attached to this computer?
 if operation_mode == OPERATION_MODE_NORMAL and len(waveshark_ports) == 1:
@@ -128,13 +148,6 @@ if operation_mode == OPERATION_MODE_NORMAL:
   else:
     sys.exit("Error connecting to WaveShark Communicator on port [{}]".format(waveshark_port))
 
-def console_log(message):
-  timestamped_message = ">>> [{}] {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message)
-  print(timestamped_message)
-  if log_file:
-    log_file.write(timestamped_message + "\n")
-    log_file.flush()
-
 console_log("WaveShark Internet Gateway starting")
 
 # Initialize AES encryption
@@ -142,7 +155,7 @@ console_log("Initializing encryption")
 aesEncryption = AESEncryption(encryption_key, encryption_iv)
 
 # Connect to Internet messaging system
-tcpipMessageClient = TCPIPMessageClient(console_log)
+tcpipMessageClient = TCPIPMessageClient(console_log, debug_log)
 console_log("Connecting to Internet MQTT messaging system [Hostname: {}] [Port: {}]".format(tcpip_hostname, tcpip_port))
 if tcpipMessageClient.connect(tcpip_hostname, tcpip_port) == True:
   console_log("Connected to Internet MQTT messaging system")

@@ -1,20 +1,22 @@
 import paho.mqtt.client as paho
 
 class TCPIPMessageClient:
-  def __init__(self, logger):
+  def __init__(self, console_log_function, debug_log_function):
     self.__client = paho.Client()
-    self.__logger = logger
+    self.__console_log = console_log_function
+    self.__debug_log = debug_log_function
 
   def __on_message(self, client, user_data, message):
     self.__receive_count += 1
+    self.__debug_log("[TCPIPMessageClient.__on_message()] Message received [receive count: {}]".format(self.__receive_count))
     self.__our_on_message_function(message.payload.decode("ascii").strip())
 
   def __on_connect(self, client, user_data, flags, rc):
-    self.__logger("Connected to Internet MQTT messaging server")
+    self.__console_log("Connected to Internet MQTT messaging server")
     self.__client.subscribe(self.__queue_name, qos = 0)
 
   def __on_disconnect(self, client, user_data, rc):
-    self.__logger("Disconnected from Internet MQTT messaging server, will auto-reconnect")
+    self.__console_log("Disconnected from Internet MQTT messaging server, will auto-reconnect")
 
   def connect(self, messaging_hostname, messaging_port):
     try:
